@@ -2,7 +2,7 @@
 
 # ==================================================
 # Xray Manager
-# Stable Reality Version
+# Performance Optimized Reality Version
 # ==================================================
 
 # ==================================================
@@ -73,6 +73,45 @@ check_system() {
         print_error "Only Debian/Ubuntu supported"
         exit 1
     fi
+
+}
+
+# ==================================================
+# Enable BBR
+# ==================================================
+
+enable_bbr() {
+
+    print_info "Enabling BBR..."
+
+    cat > /etc/sysctl.d/99-xray-performance.conf <<EOF
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+
+net.core.rmem_max=67108864
+net.core.wmem_max=67108864
+
+net.ipv4.tcp_rmem=4096 87380 67108864
+net.ipv4.tcp_wmem=4096 65536 67108864
+
+net.ipv4.tcp_fastopen=3
+net.ipv4.tcp_mtu_probing=1
+net.ipv4.tcp_slow_start_after_idle=0
+net.ipv4.tcp_window_scaling=1
+
+net.ipv4.tcp_keepalive_time=600
+net.ipv4.tcp_keepalive_intvl=30
+net.ipv4.tcp_keepalive_probes=5
+
+net.core.somaxconn=4096
+net.core.netdev_max_backlog=250000
+
+net.ipv4.ip_local_port_range=1024 65535
+EOF
+
+    sysctl --system >/dev/null 2>&1
+
+    print_info "BBR enabled"
 
 }
 
@@ -174,10 +213,6 @@ generate_xray_config() {
 
         print_error "Failed to generate Reality keys"
 
-        echo
-        echo "${KEY_OUTPUT}"
-        echo
-
         exit 1
 
     fi
@@ -189,11 +224,25 @@ generate_xray_config() {
   "log": {
     "loglevel": "warning"
   },
+
+  "policy": {
+    "levels": {
+      "0": {
+        "handshake": 4,
+        "connIdle": 300,
+        "uplinkOnly": 2,
+        "downlinkOnly": 5,
+        "bufferSize": 64
+      }
+    }
+  },
+
   "inbounds": [
     {
       "listen": "0.0.0.0",
       "port": ${PORT},
       "protocol": "vless",
+
       "settings": {
         "clients": [
           {
@@ -203,22 +252,36 @@ generate_xray_config() {
         ],
         "decryption": "none"
       },
+
       "streamSettings": {
         "network": "tcp",
         "security": "reality",
+
+        "sockopt": {
+          "tcpFastOpen": true,
+          "tcpNoDelay": true,
+          "tcpKeepAliveInterval": 15,
+          "tcpMptcp": false,
+          "mark": 255
+        },
+
         "realitySettings": {
           "show": false,
           "dest": "${DEST}:443",
           "xver": 0,
+
           "serverNames": [
             "${DEST}"
           ],
+
           "privateKey": "${PRIVATE_KEY}",
+
           "shortIds": [
             "${SHORT_ID}"
           ]
         }
       },
+
       "sniffing": {
         "enabled": true,
         "destOverride": [
@@ -229,9 +292,22 @@ generate_xray_config() {
       }
     }
   ],
+
   "outbounds": [
     {
       "protocol": "freedom",
+
+      "settings": {
+        "domainStrategy": "UseIP"
+      },
+
+      "streamSettings": {
+        "sockopt": {
+          "tcpFastOpen": true,
+          "tcpNoDelay": true
+        }
+      },
+
       "tag": "direct"
     }
   ]
@@ -267,9 +343,13 @@ User=root
 ExecStart=${XRAY_BIN} run -config ${XRAY_CONFIG}
 
 Restart=on-failure
-RestartSec=5
+RestartSec=3
 
-LimitNOFILE=51200
+LimitNOFILE=1048576
+LimitNPROC=512000
+
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target
@@ -335,6 +415,7 @@ update_xray() {
 
     print_info "Current Version:"
     echo "${CURRENT_VERSION}"
+
     echo
 
     LATEST_VERSION=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | jq -r .tag_name)
@@ -342,8 +423,6 @@ update_xray() {
     print_info "Latest Version: ${LATEST_VERSION}"
 
     echo
-
-    print_info "Downloading latest Xray..."
 
     mkdir -p /tmp/xray-update
 
@@ -367,13 +446,6 @@ update_xray() {
     rm -rf /tmp/xray-update
 
     print_info "Xray updated successfully"
-
-    NEW_VERSION=$(${XRAY_BIN} version | head -n 1)
-
-    echo
-    print_info "New Version:"
-    echo "${NEW_VERSION}"
-    echo
 
 }
 
@@ -408,6 +480,8 @@ show_client_config() {
 install_xray() {
 
     install_dependencies
+
+    enable_bbr
 
     install_xray_core
 
@@ -501,10 +575,6 @@ uninstall_xray() {
     echo "================================"
     echo
 
-    print_warn "This will completely remove Xray"
-
-    echo
-
     read -p "Are you sure? [y/N]: " CONFIRM
 
     case "${CONFIRM}" in
@@ -516,40 +586,27 @@ uninstall_xray() {
             ;;
     esac
 
-    print_info "Stopping Xray..."
-
     systemctl stop xray 2>/dev/null
-
-    print_info "Disabling Xray..."
-
     systemctl disable xray 2>/dev/null
-
-    print_info "Removing service..."
 
     rm -f ${XRAY_SERVICE}
 
     systemctl daemon-reload
 
-    print_info "Removing Xray binary..."
-
     rm -f ${XRAY_BIN}
-
-    print_info "Removing config..."
 
     rm -rf ${XRAY_DIR}
 
-    print_info "Removing logs..."
-
     rm -rf ${XRAY_LOG_DIR}
-
-    print_info "Removing VLESS link..."
 
     rm -f ${VLESS_LINK_FILE}
 
-    print_info "Removing temporary files..."
-
     rm -rf /tmp/xray-install
     rm -rf /tmp/xray-update
+
+    rm -f /etc/sysctl.d/99-xray-performance.conf
+
+    sysctl --system >/dev/null 2>&1
 
     print_info "Xray completely removed"
 
