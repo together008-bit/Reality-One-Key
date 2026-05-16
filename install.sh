@@ -162,8 +162,14 @@ generate_reality_keys() {
 
     KEY_OUTPUT=$("${XRAY_INSTALL_DIR}/xray" x25519)
 
-    PRIVATE_KEY=$(echo "$KEY_OUTPUT" | awk '/Private key:/ {print $3}')
-    PUBLIC_KEY=$(echo "$KEY_OUTPUT" | awk '/Public key:/ {print $3}')
+    PRIVATE_KEY=$(echo "$KEY_OUTPUT" | grep "Private key" | cut -d ':' -f2 | xargs)
+
+    PUBLIC_KEY=$(echo "$KEY_OUTPUT" | grep "Public key" | cut -d ':' -f2 | xargs)
+
+    if [[ -z "$PRIVATE_KEY" || -z "$PUBLIC_KEY" ]]; then
+        print_error "Failed to generate Reality keys"
+        exit 1
+    fi
 
     SHORT_ID=$(openssl rand -hex 8)
 }
