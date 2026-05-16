@@ -2,7 +2,7 @@
 
 # ==================================================
 # Xray Manager
-# Phase 1 Refactor Version
+# Phase 1 Stable Version
 # ==================================================
 
 # ==================================================
@@ -28,6 +28,17 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # ==================================================
+# Reality Domains
+# ==================================================
+
+REALITY_DESTS=(
+    "www.cloudflare.com"
+    "www.microsoft.com"
+    "www.apple.com"
+    "www.amazon.com"
+)
+
+# ==================================================
 # Print Functions
 # ==================================================
 
@@ -48,17 +59,36 @@ print_error() {
 # ==================================================
 
 check_root() {
+
     if [[ $EUID -ne 0 ]]; then
         print_error "Please run as root"
         exit 1
     fi
+
 }
 
 check_system() {
+
     if ! command -v apt >/dev/null 2>&1; then
         print_error "Only Debian/Ubuntu supported"
         exit 1
     fi
+
+}
+
+# ==================================================
+# Port Check
+# ==================================================
+
+check_port() {
+
+    PORT=$1
+
+    if ss -lnt | grep -q ":${PORT} "; then
+        print_error "Port ${PORT} is already in use"
+        exit 1
+    fi
+
 }
 
 # ==================================================
@@ -90,6 +120,7 @@ install_xray_core() {
     print_info "Installing Xray core..."
 
     mkdir -p /tmp/xray-install
+
     cd /tmp/xray-install || exit
 
     XRAY_VERSION=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | jq -r .tag_name)
@@ -107,6 +138,7 @@ install_xray_core() {
     chmod +x ${XRAY_BIN}
 
     cd ~ || exit
+
     rm -rf /tmp/xray-install
 
     print_info "Xray installed"
@@ -122,10 +154,14 @@ generate_xray_config() {
     print_info "Generating Xray config..."
 
     read -p "Enter port [443]: " PORT
+
     PORT=${PORT:-443}
 
-    read -p "Enter Reality domain [www.cloudflare.com]: " DEST
-    DEST=${DEST:-www.cloudflare.com}
+    check_port ${PORT}
+
+    DEST=${REALITY_DESTS[$RANDOM % ${#REALITY_DESTS[@]}]}
+
+    print_info "Reality domain: ${DEST}"
 
     UUID=$(cat /proc/sys/kernel/random/uuid)
 
@@ -154,11 +190,19 @@ generate_xray_config() {
         ],
         "decryption": "none"
       },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls"
+        ]
+      },
       "streamSettings": {
         "network": "tcp",
         "security": "reality",
         "realitySettings": {
           "show": false,
+          "fingerprint": "chrome",
           "dest": "${DEST}:443",
           "xver": 0,
           "serverNames": [
@@ -180,7 +224,7 @@ generate_xray_config() {
 }
 EOF
 
-    SERVER_IP=$(curl -s ipv4.ip.sb)
+    SERVER_IP=$(curl -4 -s ipv4.ip.sb)
 
     VLESS_LINK="vless://${UUID}@${SERVER_IP}:${PORT}?security=reality&sni=${DEST}&fp=chrome&pbk=${PUBLIC_KEY}&sid=${SHORT_ID}&type=tcp&flow=xtls-rprx-vision#Xray-Reality"
 
@@ -205,7 +249,9 @@ After=network.target
 
 [Service]
 User=root
+
 ExecStart=${XRAY_BIN} run -config ${XRAY_CONFIG}
+
 Restart=on-failure
 RestartSec=5
 
@@ -216,6 +262,7 @@ WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
+
     systemctl enable xray
 
 }
@@ -233,11 +280,19 @@ start_xray() {
     sleep 2
 
     if systemctl is-active --quiet xray; then
+
         print_info "Xray started successfully"
+
     else
+
         print_error "Xray failed to start"
-        systemctl status xray --no-pager
+
+        echo
+
+        ${XRAY_BIN} run -config ${XRAY_CONFIG}
+
         exit 1
+
     fi
 
 }
@@ -253,13 +308,17 @@ show_client_config() {
     print_info "VLESS Link"
 
     echo
+
     cat ${VLESS_LINK_FILE}
+
     echo
 
     print_info "QR Code"
 
     echo
+
     qrencode -t ANSIUTF8 < ${VLESS_LINK_FILE}
+
     echo
 
 }
@@ -309,9 +368,13 @@ show_config() {
     clear
 
     if [[ -f ${XRAY_CONFIG} ]]; then
+
         cat ${XRAY_CONFIG}
+
     else
+
         print_error "Config not found"
+
     fi
 
 }
@@ -329,10 +392,13 @@ show_vless_link() {
         cat ${VLESS_LINK_FILE}
 
         echo
+
         qrencode -t ANSIUTF8 < ${VLESS_LINK_FILE}
 
     else
+
         print_error "Link file not found"
+
     fi
 
 }
@@ -396,6 +462,7 @@ main_menu() {
             ;;
 
     esac
+
 }
 
 # ==================================================
@@ -403,6 +470,7 @@ main_menu() {
 # ==================================================
 
 check_root
+
 check_system
 
 while true; do
@@ -410,6 +478,7 @@ while true; do
     main_menu
 
     echo
+
     read -p "Press Enter to continue..."
 
 done
