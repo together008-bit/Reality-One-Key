@@ -160,31 +160,46 @@ install_xray() {
 generate_reality_keys() {
     print_info "Generating Reality keys..."
 
-    KEY_OUTPUT=$("${XRAY_INSTALL_DIR}/xray" x25519 2>&1)
+    KEY_OUTPUT=$("${XRAY_INSTALL_DIR}/xray" x25519 2>&1 || true)
 
-    while IFS= read -r line; do
-        case "$line" in
-            *"Private key:"*)
-                PRIVATE_KEY=$(echo "$line" | cut -d ':' -f2 | xargs)
-                ;;
-            *"Public key:"*)
-                PUBLIC_KEY=$(echo "$line" | cut -d ':' -f2 | xargs)
-                ;;
-        esac
-    done <<< "$KEY_OUTPUT"
+    echo "${KEY_OUTPUT}"
 
-    if [[ -z "$PRIVATE_KEY" || -z "$PUBLIC_KEY" ]]; then
+    PRIVATE_KEY=$(echo "${KEY_OUTPUT}" | grep -i "Private" | sed 's/.*Private key[: ]*//')
+
+    PUBLIC_KEY=$(echo "${KEY_OUTPUT}" | grep -i "Public" | sed 's/.*Public key[: ]*//')
+
+    # fallback for newer xray versions
+    if [[ -z "${PRIVATE_KEY}" || -z "${PUBLIC_KEY}" ]]; then
+
+        print_warn "Primary key generation failed, trying fallback..."
+
+        KEY_OUTPUT=$("${XRAY_INSTALL_DIR}/xray" x25519 -i 2>&1 || true)
+
+        echo "${KEY_OUTPUT}"
+
+        PRIVATE_KEY=$(echo "${KEY_OUTPUT}" | grep -i "Private" | sed 's/.*Private key[: ]*//')
+
+        PUBLIC_KEY=$(echo "${KEY_OUTPUT}" | grep -i "Public" | sed 's/.*Public key[: ]*//')
+    fi
+
+    # trim spaces
+    PRIVATE_KEY=$(echo "${PRIVATE_KEY}" | xargs)
+    PUBLIC_KEY=$(echo "${PUBLIC_KEY}" | xargs)
+
+    if [[ -z "${PRIVATE_KEY}" || -z "${PUBLIC_KEY}" ]]; then
         print_error "Failed to generate Reality keys"
 
         echo
         echo "Raw output:"
-        echo "$KEY_OUTPUT"
+        echo "${KEY_OUTPUT}"
         echo
 
         exit 1
     fi
 
     SHORT_ID=$(openssl rand -hex 8)
+
+    print_info "Reality keys generated successfully"
 }
 
 generate_config() {
