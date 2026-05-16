@@ -84,6 +84,30 @@ sudo bash install.sh
 
 ---
 
+# Upgrade Xray
+
+```bash
+curl -O https://raw.githubusercontent.com/together008-bit/Reality-One-Key/main/upgrade.sh
+
+chmod +x upgrade.sh
+
+sudo bash upgrade.sh
+```
+
+---
+
+# Uninstall Xray
+
+```bash
+curl -O https://raw.githubusercontent.com/together008-bit/Reality-One-Key/main/uninstall.sh
+
+chmod +x uninstall.sh
+
+sudo bash uninstall.sh
+```
+
+---
+
 # systemd 管理
 
 查看状态：
