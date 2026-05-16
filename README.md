@@ -112,7 +112,7 @@ xtls-rprx-vision
 ## One Command Install
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/YOUR_REPO/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/together008-bit/Reality-One-Key/main/install.sh)
 ```
 
 ---
