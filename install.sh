@@ -160,14 +160,27 @@ install_xray() {
 generate_reality_keys() {
     print_info "Generating Reality keys..."
 
-    KEY_OUTPUT=$("${XRAY_INSTALL_DIR}/xray" x25519)
+    KEY_OUTPUT=$("${XRAY_INSTALL_DIR}/xray" x25519 2>&1)
 
-    PRIVATE_KEY=$(echo "$KEY_OUTPUT" | grep "Private key" | cut -d ':' -f2 | xargs)
-
-    PUBLIC_KEY=$(echo "$KEY_OUTPUT" | grep "Public key" | cut -d ':' -f2 | xargs)
+    while IFS= read -r line; do
+        case "$line" in
+            *"Private key:"*)
+                PRIVATE_KEY=$(echo "$line" | cut -d ':' -f2 | xargs)
+                ;;
+            *"Public key:"*)
+                PUBLIC_KEY=$(echo "$line" | cut -d ':' -f2 | xargs)
+                ;;
+        esac
+    done <<< "$KEY_OUTPUT"
 
     if [[ -z "$PRIVATE_KEY" || -z "$PUBLIC_KEY" ]]; then
         print_error "Failed to generate Reality keys"
+
+        echo
+        echo "Raw output:"
+        echo "$KEY_OUTPUT"
+        echo
+
         exit 1
     fi
 
