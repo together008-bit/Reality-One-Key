@@ -160,31 +160,13 @@ install_xray() {
 generate_reality_keys() {
     print_info "Generating Reality keys..."
 
-    KEY_OUTPUT=$("${XRAY_INSTALL_DIR}/xray" x25519 2>&1 || true)
+    KEY_OUTPUT=$("${XRAY_INSTALL_DIR}/xray" x25519)
 
     echo "${KEY_OUTPUT}"
 
-    PRIVATE_KEY=$(echo "${KEY_OUTPUT}" | grep -i "Private" | sed 's/.*Private key[: ]*//')
+    PRIVATE_KEY=$(echo "${KEY_OUTPUT}" | grep "PrivateKey" | awk '{print $2}')
 
-    PUBLIC_KEY=$(echo "${KEY_OUTPUT}" | grep -i "Public" | sed 's/.*Public key[: ]*//')
-
-    # fallback for newer xray versions
-    if [[ -z "${PRIVATE_KEY}" || -z "${PUBLIC_KEY}" ]]; then
-
-        print_warn "Primary key generation failed, trying fallback..."
-
-        KEY_OUTPUT=$("${XRAY_INSTALL_DIR}/xray" x25519 -i 2>&1 || true)
-
-        echo "${KEY_OUTPUT}"
-
-        PRIVATE_KEY=$(echo "${KEY_OUTPUT}" | grep -i "Private" | sed 's/.*Private key[: ]*//')
-
-        PUBLIC_KEY=$(echo "${KEY_OUTPUT}" | grep -i "Public" | sed 's/.*Public key[: ]*//')
-    fi
-
-    # trim spaces
-    PRIVATE_KEY=$(echo "${PRIVATE_KEY}" | xargs)
-    PUBLIC_KEY=$(echo "${PUBLIC_KEY}" | xargs)
+    PUBLIC_KEY=$(echo "${KEY_OUTPUT}" | grep "Password (PublicKey)" | awk '{print $3}')
 
     if [[ -z "${PRIVATE_KEY}" || -z "${PUBLIC_KEY}" ]]; then
         print_error "Failed to generate Reality keys"
