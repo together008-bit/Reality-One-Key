@@ -168,7 +168,6 @@ generate_xray_config() {
     KEY_OUTPUT=$(${XRAY_BIN} x25519)
 
     PRIVATE_KEY=$(echo "${KEY_OUTPUT}" | sed -n '1p' | cut -d ':' -f2 | tr -d ' ')
-
     PUBLIC_KEY=$(echo "${KEY_OUTPUT}" | sed -n '2p' | cut -d ':' -f2 | tr -d ' ')
 
     if [[ -z "${PRIVATE_KEY}" || -z "${PUBLIC_KEY}" ]]; then
@@ -318,8 +317,6 @@ start_xray() {
 
 show_client_config() {
 
-    clear
-
     print_info "VLESS Link"
 
     echo
@@ -380,7 +377,11 @@ restart_xray() {
 
 show_config() {
 
-    clear
+    echo
+    echo "================================"
+    echo "Xray Config"
+    echo "================================"
+    echo
 
     if [[ -f ${XRAY_CONFIG} ]]; then
 
@@ -400,7 +401,11 @@ show_config() {
 
 show_vless_link() {
 
-    clear
+    echo
+    echo "================================"
+    echo "VLESS Link"
+    echo "================================"
+    echo
 
     if [[ -f ${VLESS_LINK_FILE} ]]; then
 
@@ -424,7 +429,11 @@ show_vless_link() {
 
 uninstall_xray() {
 
-    clear
+    echo
+    echo "================================"
+    echo "Uninstall Xray"
+    echo "================================"
+    echo
 
     print_warn "This will completely remove Xray"
 
@@ -485,8 +494,7 @@ uninstall_xray() {
 
 main_menu() {
 
-    clear
-
+    echo
     echo "================================"
     echo "         Xray Manager"
     echo "================================"
@@ -554,7 +562,10 @@ while true; do
     main_menu
 
     echo
+    echo "--------------------------------"
 
     read -p "Press Enter to continue..."
+
+    echo
 
 done
