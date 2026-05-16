@@ -312,6 +312,72 @@ start_xray() {
 }
 
 # ==================================================
+# Update Xray Core
+# ==================================================
+
+update_xray() {
+
+    echo
+    echo "================================"
+    echo "Update Xray Core"
+    echo "================================"
+    echo
+
+    if [[ ! -f ${XRAY_BIN} ]]; then
+
+        print_error "Xray is not installed"
+
+        return
+
+    fi
+
+    CURRENT_VERSION=$(${XRAY_BIN} version | head -n 1)
+
+    print_info "Current Version:"
+    echo "${CURRENT_VERSION}"
+    echo
+
+    LATEST_VERSION=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | jq -r .tag_name)
+
+    print_info "Latest Version: ${LATEST_VERSION}"
+
+    echo
+
+    print_info "Downloading latest Xray..."
+
+    mkdir -p /tmp/xray-update
+
+    cd /tmp/xray-update || exit
+
+    wget -O xray.zip \
+    "https://github.com/XTLS/Xray-core/releases/download/${LATEST_VERSION}/Xray-linux-64.zip"
+
+    unzip -o xray.zip
+
+    systemctl stop xray
+
+    install -m 755 xray ${XRAY_BIN}
+
+    chmod +x ${XRAY_BIN}
+
+    systemctl restart xray
+
+    cd ~ || exit
+
+    rm -rf /tmp/xray-update
+
+    print_info "Xray updated successfully"
+
+    NEW_VERSION=$(${XRAY_BIN} version | head -n 1)
+
+    echo
+    print_info "New Version:"
+    echo "${NEW_VERSION}"
+    echo
+
+}
+
+# ==================================================
 # Show Client Config
 # ==================================================
 
@@ -483,6 +549,7 @@ uninstall_xray() {
     print_info "Removing temporary files..."
 
     rm -rf /tmp/xray-install
+    rm -rf /tmp/xray-update
 
     print_info "Xray completely removed"
 
@@ -518,7 +585,7 @@ main_menu() {
             ;;
 
         2)
-            print_warn "Coming soon"
+            update_xray
             ;;
 
         3)
