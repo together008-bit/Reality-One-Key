@@ -167,20 +167,20 @@ generate_xray_config() {
 
     KEYS=$(${XRAY_BIN} x25519)
 
-    PRIVATE_KEY=$(echo "${KEYS}" | sed -n 's/Private key: //p')
-    PUBLIC_KEY=$(echo "${KEYS}" | sed -n 's/Public key: //p')
+PRIVATE_KEY=$(echo "${KEYS}" | grep "PrivateKey" | awk '{print $2}')
+PUBLIC_KEY=$(echo "${KEYS}" | grep "PublicKey" | awk '{print $3}')
 
-    if [[ -z "${PRIVATE_KEY}" || -z "${PUBLIC_KEY}" ]]; then
+if [[ -z "${PRIVATE_KEY}" || -z "${PUBLIC_KEY}" ]]; then
 
-        print_error "Failed to generate Reality keys"
+    print_error "Failed to generate Reality keys"
 
-        echo
-        echo "${KEYS}"
-        echo
+    echo
+    echo "${KEYS}"
+    echo
 
-        exit 1
+    exit 1
 
-    fi
+fi
 
     SHORT_ID=$(openssl rand -hex 8)
 
