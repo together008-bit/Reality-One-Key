@@ -2,7 +2,7 @@
 
 # ==================================================
 # Xray Manager
-# Performance Optimized Reality Version
+# Lightweight Performance Reality Version
 # ==================================================
 
 # ==================================================
@@ -15,8 +15,6 @@ XRAY_CONFIG="${XRAY_DIR}/config.json"
 XRAY_BIN="/usr/local/bin/xray"
 
 XRAY_SERVICE="/etc/systemd/system/xray.service"
-
-XRAY_LOG_DIR="/var/log/xray"
 
 VLESS_LINK_FILE="/root/vless-link.txt"
 
@@ -88,24 +86,11 @@ enable_bbr() {
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
 
-net.core.rmem_max=67108864
-net.core.wmem_max=67108864
-
-net.ipv4.tcp_rmem=4096 87380 67108864
-net.ipv4.tcp_wmem=4096 65536 67108864
-
 net.ipv4.tcp_fastopen=3
 net.ipv4.tcp_mtu_probing=1
 net.ipv4.tcp_slow_start_after_idle=0
-net.ipv4.tcp_window_scaling=1
-
-net.ipv4.tcp_keepalive_time=600
-net.ipv4.tcp_keepalive_intvl=30
-net.ipv4.tcp_keepalive_probes=5
 
 net.core.somaxconn=4096
-net.core.netdev_max_backlog=250000
-
 net.ipv4.ip_local_port_range=1024 65535
 EOF
 
@@ -142,11 +127,8 @@ install_dependencies() {
 
     apt install -y \
         curl \
-        wget \
         unzip \
-        openssl \
-        qrencode \
-        jq
+        openssl
 
 }
 
@@ -162,9 +144,9 @@ install_xray_core() {
 
     cd /tmp/xray-install || exit
 
-    XRAY_VERSION=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | jq -r .tag_name)
+    XRAY_VERSION=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | grep tag_name | cut -d '"' -f4)
 
-    wget -O xray.zip \
+    curl -L -o xray.zip \
     "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/Xray-linux-64.zip"
 
     unzip -o xray.zip
@@ -172,7 +154,6 @@ install_xray_core() {
     install -m 755 xray ${XRAY_BIN}
 
     mkdir -p ${XRAY_DIR}
-    mkdir -p ${XRAY_LOG_DIR}
 
     chmod +x ${XRAY_BIN}
 
@@ -260,9 +241,7 @@ generate_xray_config() {
         "sockopt": {
           "tcpFastOpen": true,
           "tcpNoDelay": true,
-          "tcpKeepAliveInterval": 15,
-          "tcpMptcp": false,
-          "mark": 255
+          "tcpKeepAliveInterval": 15
         },
 
         "realitySettings": {
@@ -296,18 +275,6 @@ generate_xray_config() {
   "outbounds": [
     {
       "protocol": "freedom",
-
-      "settings": {
-        "domainStrategy": "UseIP"
-      },
-
-      "streamSettings": {
-        "sockopt": {
-          "tcpFastOpen": true,
-          "tcpNoDelay": true
-        }
-      },
-
       "tag": "direct"
     }
   ]
@@ -346,7 +313,6 @@ Restart=on-failure
 RestartSec=3
 
 LimitNOFILE=1048576
-LimitNPROC=512000
 
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
@@ -418,7 +384,7 @@ update_xray() {
 
     echo
 
-    LATEST_VERSION=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | jq -r .tag_name)
+    LATEST_VERSION=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | grep tag_name | cut -d '"' -f4)
 
     print_info "Latest Version: ${LATEST_VERSION}"
 
@@ -428,7 +394,7 @@ update_xray() {
 
     cd /tmp/xray-update || exit
 
-    wget -O xray.zip \
+    curl -L -o xray.zip \
     "https://github.com/XTLS/Xray-core/releases/download/${LATEST_VERSION}/Xray-linux-64.zip"
 
     unzip -o xray.zip
@@ -450,64 +416,26 @@ update_xray() {
 }
 
 # ==================================================
-# Show Client Config
+# Show VLESS Link
 # ==================================================
 
-show_client_config() {
-
-    print_info "VLESS Link"
+show_vless_link() {
 
     echo
-
-    cat ${VLESS_LINK_FILE}
-
+    echo "================================"
+    echo "VLESS Link"
+    echo "================================"
     echo
 
-    print_info "QR Code"
+    if [[ -f ${VLESS_LINK_FILE} ]]; then
 
-    echo
+        cat ${VLESS_LINK_FILE}
 
-    qrencode -t ANSIUTF8 < ${VLESS_LINK_FILE}
+    else
 
-    echo
+        print_error "Link file not found"
 
-}
-
-# ==================================================
-# Install Xray
-# ==================================================
-
-install_xray() {
-
-    install_dependencies
-
-    enable_bbr
-
-    install_xray_core
-
-    generate_xray_config
-
-    create_service
-
-    start_xray
-
-    show_client_config
-
-}
-
-# ==================================================
-# Restart Xray
-# ==================================================
-
-restart_xray() {
-
-    print_info "Restarting Xray..."
-
-    systemctl restart xray
-
-    sleep 2
-
-    systemctl status xray --no-pager
+    fi
 
 }
 
@@ -536,30 +464,40 @@ show_config() {
 }
 
 # ==================================================
-# Show VLESS Link
+# Install Xray
 # ==================================================
 
-show_vless_link() {
+install_xray() {
 
-    echo
-    echo "================================"
-    echo "VLESS Link"
-    echo "================================"
-    echo
+    install_dependencies
 
-    if [[ -f ${VLESS_LINK_FILE} ]]; then
+    enable_bbr
 
-        cat ${VLESS_LINK_FILE}
+    install_xray_core
 
-        echo
+    generate_xray_config
 
-        qrencode -t ANSIUTF8 < ${VLESS_LINK_FILE}
+    create_service
 
-    else
+    start_xray
 
-        print_error "Link file not found"
+    show_vless_link
 
-    fi
+}
+
+# ==================================================
+# Restart Xray
+# ==================================================
+
+restart_xray() {
+
+    print_info "Restarting Xray..."
+
+    systemctl restart xray
+
+    sleep 2
+
+    systemctl status xray --no-pager
 
 }
 
@@ -596,8 +534,6 @@ uninstall_xray() {
     rm -f ${XRAY_BIN}
 
     rm -rf ${XRAY_DIR}
-
-    rm -rf ${XRAY_LOG_DIR}
 
     rm -f ${VLESS_LINK_FILE}
 
