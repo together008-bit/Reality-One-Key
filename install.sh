@@ -146,6 +146,32 @@ install_xray_core() {
 }
 
 # ==================================================
+# Generate Reality Keys
+# ==================================================
+
+generate_reality_keys() {
+
+    KEY_OUTPUT=$(${XRAY_BIN} x25519)
+
+    PRIVATE_KEY=$(echo "${KEY_OUTPUT}" | grep -i "Private" | awk -F ': ' '{print $2}')
+
+    PUBLIC_KEY=$(echo "${KEY_OUTPUT}" | grep -i "PublicKey\|Public key\|Password" | awk -F ': ' '{print $2}')
+
+    if [[ -z "${PRIVATE_KEY}" || -z "${PUBLIC_KEY}" ]]; then
+
+        print_error "Failed to generate Reality keys"
+
+        echo
+        echo "${KEY_OUTPUT}"
+        echo
+
+        exit 1
+
+    fi
+
+}
+
+# ==================================================
 # Generate Xray Config
 # ==================================================
 
@@ -165,29 +191,9 @@ generate_xray_config() {
 
     UUID=$(cat /proc/sys/kernel/random/uuid)
 
-    KEYS=$(${XRAY_BIN} x25519)
-
-PRIVATE_KEY=$(echo "${KEYS}" | grep "PrivateKey" | awk '{print $2}')
-PUBLIC_KEY=$(echo "${KEYS}" | grep "PublicKey" | awk '{print $3}')
-
-if [[ -z "${PRIVATE_KEY}" || -z "${PUBLIC_KEY}" ]]; then
-
-    print_error "Failed to generate Reality keys"
-
-    echo
-    echo "${KEYS}"
-    echo
-
-    exit 1
-
-fi
+    generate_reality_keys
 
     SHORT_ID=$(openssl rand -hex 8)
-
-    echo
-    print_info "Private Key: ${PRIVATE_KEY}"
-    print_info "Public Key : ${PUBLIC_KEY}"
-    echo
 
     cat > ${XRAY_CONFIG} <<EOF
 {
@@ -196,6 +202,7 @@ fi
   },
   "inbounds": [
     {
+      "listen": "0.0.0.0",
       "port": ${PORT},
       "protocol": "vless",
       "settings": {
@@ -207,19 +214,11 @@ fi
         ],
         "decryption": "none"
       },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": [
-          "http",
-          "tls"
-        ]
-      },
       "streamSettings": {
         "network": "tcp",
         "security": "reality",
         "realitySettings": {
           "show": false,
-          "fingerprint": "chrome",
           "dest": "${DEST}:443",
           "xver": 0,
           "serverNames": [
@@ -230,12 +229,21 @@ fi
             "${SHORT_ID}"
           ]
         }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
       }
     }
   ],
   "outbounds": [
     {
-      "protocol": "freedom"
+      "protocol": "freedom",
+      "tag": "direct"
     }
   ]
 }
@@ -243,7 +251,7 @@ EOF
 
     SERVER_IP=$(curl -4 -s ipv4.ip.sb)
 
-    VLESS_LINK="vless://${UUID}@${SERVER_IP}:${PORT}?security=reality&sni=${DEST}&fp=chrome&pbk=${PUBLIC_KEY}&sid=${SHORT_ID}&type=tcp&flow=xtls-rprx-vision#Xray-Reality"
+    VLESS_LINK="vless://${UUID}@${SERVER_IP}:${PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${DEST}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Xray-Reality"
 
     echo "${VLESS_LINK}" > ${VLESS_LINK_FILE}
 
@@ -262,7 +270,7 @@ create_service() {
     cat > ${XRAY_SERVICE} <<EOF
 [Unit]
 Description=Xray Service
-After=network.target
+After=network.target nss-lookup.target
 
 [Service]
 User=root
