@@ -69,45 +69,6 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/together008-bit/Reality-
 
 ---
 
-# 手动安装方式
-
-```bash
-# 下载脚本
-curl -o install.sh https://raw.githubusercontent.com/together008-bit/Reality-One-Key/main/install.sh
-
-# 添加执行权限
-chmod +x install.sh
-
-# 运行安装
-sudo bash install.sh
-```
-
----
-
-# Upgrade Xray
-
-```bash
-curl -O https://raw.githubusercontent.com/together008-bit/Reality-One-Key/main/upgrade.sh
-
-chmod +x upgrade.sh
-
-sudo bash upgrade.sh
-```
-
----
-
-# Uninstall Xray
-
-```bash
-curl -O https://raw.githubusercontent.com/together008-bit/Reality-One-Key/main/uninstall.sh
-
-chmod +x uninstall.sh
-
-sudo bash uninstall.sh
-```
-
----
-
 # systemd 管理
 
 查看状态：
