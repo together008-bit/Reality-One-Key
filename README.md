@@ -1,179 +1,209 @@
-# Reality-One-Key
+# Xray Reality One-Click Script
 
-一个适用于个人使用的 Xray 一键安装脚本。
-
-本项目基于官方 Xray Core，自动部署：
-
-- VLESS + REALITY
-- Vision Flow
-- BBR 加速
-- systemd 服务管理
-
-无需：
-
-- 域名
-- SSL 证书
-- nginx
-- 面板
-- Docker
-
-适用于：
-
-- Debian
-- Ubuntu
+轻量、精简、安全的 Xray Reality 一键安装脚本。  
+仅使用 Xray 官方 Core，不包含任何后门、订阅系统、面板组件或第三方魔改内容。
 
 ---
 
-# 功能特性
+# Features
 
-- 自动安装官方最新版 Xray
+- 基于 Xray 官方 Core
+- VLESS + REALITY + Vision
 - 自动开启 BBR
-- 自动生成 UUID
-- 自动生成 Reality 密钥
-- 自动生成 shortId
-- 自动生成 VLESS 分享链接
-- 自动创建 systemd 服务
-- 支持 x86_64 / ARM64
-- 仅使用官方 GitHub Release
+- TCP Fast Open 优化
+- TCP NoDelay 优化
+- KeepAlive 优化
+- 极简依赖
+- 无数据库
+- 无面板
+- 无额外服务
+- 无后门
+- 无 telemetry
+- 支持：
+  - 安装
+  - 更新 Xray Core
+  - 重启服务
+  - 查看配置
+  - 查看分享链接
+  - 完整卸载
 
 ---
 
-# 支持系统
+# Why This Script
 
-- Debian 11 / 12
-- Ubuntu 20.04 / 22.04 / 24.04
+很多一键脚本：
 
----
+- 集成大量无用组件
+- 包含复杂面板
+- 修改系统过多
+- 依赖庞大
+- 来源不透明
 
-# 一键安装
+本项目目标：
 
-执行以下命令：
-
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/together008-bit/Reality-One-Key/main/install.sh)"
-```
-
-安装过程中会询问：
-
-- 监听端口
-- Reality SNI
-
-安装完成后会自动输出：
-
-- Server IP
-- Port
-- UUID
-- Public Key
-- shortId
-- VLESS 分享链接
+> 只做一件事：  
+> 提供一个干净、稳定、性能优化的 Reality 节点。
 
 ---
 
-# systemd 管理
+# Security
 
-查看状态：
+本脚本：
 
-```bash
-systemctl status xray
-```
+- 仅下载 Xray 官方 Release
+- 不上传任何数据
+- 不连接第三方 API
+- 不包含订阅系统
+- 不包含用户追踪
+- 不包含后门
 
-重启：
+Xray 下载来源：
 
-```bash
-systemctl restart xray
-```
-
-停止：
-
-```bash
-systemctl stop xray
-```
-
-开机自启：
-
-```bash
-systemctl enable xray
-```
+- https://github.com/XTLS/Xray-core
 
 ---
 
-# 配置文件位置
+# Performance Optimization
+
+已内置：
+
+## BBR
+
+自动开启：
 
 ```bash
-/usr/local/etc/xray/config.json
+net.ipv4.tcp_congestion_control=bbr
 ```
 
 ---
 
-# Reality 默认配置
+## TCP Fast Open
 
-默认：
+降低首次连接 RTT。
+
+---
+
+## TCP NoDelay
+
+降低小包延迟。
+
+---
+
+## TCP KeepAlive
+
+提升移动网络稳定性。
+
+---
+
+## Vision Flow
+
+使用：
 
 ```text
-SNI:
-www.cloudflare.com
+xtls-rprx-vision
 ```
 
-支持自定义。
+获得更好的性能与伪装效果。
 
 ---
 
-# 卸载 Xray
+# Install
 
-后续将提供：
+## One Command Install
 
 ```bash
-uninstall.sh
+bash <(curl -Ls https://raw.githubusercontent.com/YOUR_REPO/install.sh)
 ```
 
 ---
 
-# 项目目标
+# Menu
 
-本项目仅用于：
-
-- 个人使用
-- 学习研究
-- 极简部署
-
-不支持：
-
-- 多用户
-- 面板
-- VMess
-- Trojan
-- Clash
-- sing-box
-- Docker
-- nginx
-
-保持：
-
-- 简洁
-- 透明
-- 可维护
-- 官方化
+```text
+1. Install Xray
+2. Update Xray Core
+3. Restart Xray
+4. Show Config
+5. Show VLESS Link
+6. Uninstall Xray
+0. Exit
+```
 
 ---
 
-# 安全说明
+# Default Configuration
 
-本项目：
-
-- 仅从官方 Xray Release 下载程序
-- 不使用第三方编译 Core
-- 不包含后门
-- 不修改 routing
-- 不植入 DNS 配置
-
-Xray 官方项目：
-
-https://github.com/XTLS/Xray-core
+| Item | Value |
+|---|---|
+| Protocol | VLESS |
+| Transport | TCP |
+| TLS | REALITY |
+| Flow | xtls-rprx-vision |
+| Port | 443 |
+| TCP Fast Open | Enabled |
+| BBR | Enabled |
+| Mux | Disabled |
 
 ---
 
-# 免责声明
+# Recommended Client Settings
+
+## Enable
+
+- TCP Fast Open
+- UDP Relay
+
+## Disable
+
+- Mux
+- Allow Insecure
+- Fragment
+
+---
+
+# Supported Systems
+
+- Ubuntu 20+
+- Ubuntu 22+
+- Debian 11+
+- Debian 12+
+
+---
+
+# Uninstall
+
+脚本菜单：
+
+```text
+6. Uninstall Xray
+```
+
+将完整删除：
+
+- Xray Core
+- Config
+- Systemd Service
+- Performance Config
+- Temporary Files
+
+---
+
+# Disclaimer
+
+本项目仅供：
+
+- 学习
+- 研究
+- 网络技术测试
 
 请遵守当地法律法规。
 
-本项目仅供学习与技术研究使用。
+---
+
+# Credits
+
+- Xray Core Official Project  
+  https://github.com/XTLS/Xray-core
+
+- XTLS Official Documentation  
+  https://xtls.github.io/
