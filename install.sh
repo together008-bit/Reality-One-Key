@@ -1,35 +1,35 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-set -e
+# ==================================================
+# Xray Manager
+# Phase 1 Refactor Version
+# ==================================================
 
-########################################
-# Xray Private Installer
-# Only for:
-# - Debian / Ubuntu
-# - VLESS + REALITY
-# - Personal usage
-########################################
+# ==================================================
+# Global Variables
+# ==================================================
 
-XRAY_INSTALL_DIR="/usr/local/bin"
-XRAY_CONFIG_DIR="/usr/local/etc/xray"
-XRAY_CONFIG_FILE="${XRAY_CONFIG_DIR}/config.json"
-XRAY_SERVICE_FILE="/etc/systemd/system/xray.service"
+XRAY_DIR="/usr/local/etc/xray"
+XRAY_CONFIG="${XRAY_DIR}/config.json"
 
-SUPPORTED_PORTS=(443 8443 2053 2083 2096)
-DEFAULT_SNI="www.cloudflare.com"
+XRAY_BIN="/usr/local/bin/xray"
 
-########################################
-# Colors
-########################################
+XRAY_SERVICE="/etc/systemd/system/xray.service"
+
+XRAY_LOG_DIR="/var/log/xray"
+
+VLESS_LINK_FILE="/root/vless-link.txt"
+
+XRAY_VERSION=""
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-########################################
-# Helpers
-########################################
+# ==================================================
+# Print Functions
+# ==================================================
 
 print_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
@@ -43,158 +43,106 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-require_root() {
-    if [[ "$EUID" -ne 0 ]]; then
+# ==================================================
+# System Check
+# ==================================================
+
+check_root() {
+    if [[ $EUID -ne 0 ]]; then
         print_error "Please run as root"
         exit 1
     fi
 }
 
-detect_os() {
-    if [[ -f /etc/os-release ]]; then
-        . /etc/os-release
-
-        case "$ID" in
-            ubuntu|debian)
-                OS="$ID"
-                ;;
-            *)
-                print_error "Unsupported OS: $ID"
-                exit 1
-                ;;
-        esac
-    else
-        print_error "Cannot detect OS"
+check_system() {
+    if ! command -v apt >/dev/null 2>&1; then
+        print_error "Only Debian/Ubuntu supported"
         exit 1
     fi
 }
 
+# ==================================================
+# Install Dependencies
+# ==================================================
+
 install_dependencies() {
+
     print_info "Installing dependencies..."
 
-    apt update
+    apt update -y
 
     apt install -y \
         curl \
         wget \
         unzip \
         openssl \
-        jq \
-        cron
+        qrencode \
+        jq
+
 }
 
-enable_bbr() {
-    print_info "Enabling BBR..."
+# ==================================================
+# Install Xray Core
+# ==================================================
 
-    cat > /etc/sysctl.d/99-xray-bbr.conf <<EOF
-net.core.default_qdisc=fq
-net.ipv4.tcp_congestion_control=bbr
-EOF
+install_xray_core() {
 
-    sysctl --system >/dev/null 2>&1 || true
+    print_info "Installing Xray core..."
+
+    mkdir -p /tmp/xray-install
+    cd /tmp/xray-install || exit
+
+    XRAY_VERSION=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | jq -r .tag_name)
+
+    wget -O xray.zip \
+    "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/Xray-linux-64.zip"
+
+    unzip -o xray.zip
+
+    install -m 755 xray ${XRAY_BIN}
+
+    mkdir -p ${XRAY_DIR}
+    mkdir -p ${XRAY_LOG_DIR}
+
+    chmod +x ${XRAY_BIN}
+
+    cd ~ || exit
+    rm -rf /tmp/xray-install
+
+    print_info "Xray installed"
+
 }
 
-choose_port() {
-    RANDOM_INDEX=$((RANDOM % ${#SUPPORTED_PORTS[@]}))
-    DEFAULT_PORT="${SUPPORTED_PORTS[$RANDOM_INDEX]}"
+# ==================================================
+# Generate Xray Config
+# ==================================================
 
-    read -rp "Port [default: ${DEFAULT_PORT}]: " PORT
+generate_xray_config() {
 
-    PORT="${PORT:-$DEFAULT_PORT}"
-}
+    print_info "Generating Xray config..."
 
-choose_sni() {
-    read -rp "Reality SNI [default: ${DEFAULT_SNI}]: " SNI
+    read -p "Enter port [443]: " PORT
+    PORT=${PORT:-443}
 
-    SNI="${SNI:-$DEFAULT_SNI}"
-}
+    read -p "Enter Reality domain [www.cloudflare.com]: " DEST
+    DEST=${DEST:-www.cloudflare.com}
 
-generate_uuid() {
     UUID=$(cat /proc/sys/kernel/random/uuid)
-}
 
-install_xray() {
-    print_info "Fetching latest Xray release..."
+    KEYS=$(${XRAY_BIN} x25519)
 
-    LATEST_VERSION=$(curl -s \
-        https://api.github.com/repos/XTLS/Xray-core/releases/latest \
-        | jq -r .tag_name)
-
-    if [[ -z "$LATEST_VERSION" ]]; then
-        print_error "Failed to fetch latest version"
-        exit 1
-    fi
-
-    ARCH=$(uname -m)
-
-    case "$ARCH" in
-        x86_64)
-            XRAY_ARCH="64"
-            ;;
-        aarch64|arm64)
-            XRAY_ARCH="arm64-v8a"
-            ;;
-        *)
-            print_error "Unsupported architecture: $ARCH"
-            exit 1
-            ;;
-    esac
-
-    DOWNLOAD_URL="https://github.com/XTLS/Xray-core/releases/download/${LATEST_VERSION}/Xray-linux-${XRAY_ARCH}.zip"
-
-    TMP_DIR=$(mktemp -d)
-
-    print_info "Downloading Xray ${LATEST_VERSION}..."
-
-    wget -qO "${TMP_DIR}/xray.zip" "$DOWNLOAD_URL"
-
-    unzip -q "${TMP_DIR}/xray.zip" -d "$TMP_DIR"
-
-    install -m 755 "${TMP_DIR}/xray" "${XRAY_INSTALL_DIR}/xray"
-
-    mkdir -p "$XRAY_CONFIG_DIR"
-
-    rm -rf "$TMP_DIR"
-}
-
-generate_reality_keys() {
-    print_info "Generating Reality keys..."
-
-    KEY_OUTPUT=$("${XRAY_INSTALL_DIR}/xray" x25519)
-
-    echo "${KEY_OUTPUT}"
-
-    PRIVATE_KEY=$(echo "${KEY_OUTPUT}" | grep "PrivateKey" | awk '{print $2}')
-
-    PUBLIC_KEY=$(echo "${KEY_OUTPUT}" | grep "Password (PublicKey)" | awk '{print $3}')
-
-    if [[ -z "${PRIVATE_KEY}" || -z "${PUBLIC_KEY}" ]]; then
-        print_error "Failed to generate Reality keys"
-
-        echo
-        echo "Raw output:"
-        echo "${KEY_OUTPUT}"
-        echo
-
-        exit 1
-    fi
+    PRIVATE_KEY=$(echo "${KEYS}" | head -n 1 | awk '{print $3}')
+    PUBLIC_KEY=$(echo "${KEYS}" | tail -n 1 | awk '{print $3}')
 
     SHORT_ID=$(openssl rand -hex 8)
 
-    print_info "Reality keys generated successfully"
-}
-
-generate_config() {
-    print_info "Generating config.json..."
-
-    cat > "$XRAY_CONFIG_FILE" <<EOF
+    cat > ${XRAY_CONFIG} <<EOF
 {
   "log": {
     "loglevel": "warning"
   },
   "inbounds": [
     {
-      "listen": "0.0.0.0",
       "port": ${PORT},
       "protocol": "vless",
       "settings": {
@@ -211,10 +159,10 @@ generate_config() {
         "security": "reality",
         "realitySettings": {
           "show": false,
-          "dest": "${SNI}:443",
+          "dest": "${DEST}:443",
           "xver": 0,
           "serverNames": [
-            "${SNI}"
+            "${DEST}"
           ],
           "privateKey": "${PRIVATE_KEY}",
           "shortIds": [
@@ -226,35 +174,42 @@ generate_config() {
   ],
   "outbounds": [
     {
-      "protocol": "freedom",
-      "tag": "direct"
+      "protocol": "freedom"
     }
   ]
 }
 EOF
+
+    SERVER_IP=$(curl -s ipv4.ip.sb)
+
+    VLESS_LINK="vless://${UUID}@${SERVER_IP}:${PORT}?security=reality&sni=${DEST}&fp=chrome&pbk=${PUBLIC_KEY}&sid=${SHORT_ID}&type=tcp&flow=xtls-rprx-vision#Xray-Reality"
+
+    echo "${VLESS_LINK}" > ${VLESS_LINK_FILE}
+
+    print_info "Config generated"
+
 }
 
-validate_config() {
-    print_info "Validating config..."
-
-    "${XRAY_INSTALL_DIR}/xray" run -test -config "$XRAY_CONFIG_FILE"
-}
+# ==================================================
+# Create Service
+# ==================================================
 
 create_service() {
+
     print_info "Creating systemd service..."
 
-    cat > "$XRAY_SERVICE_FILE" <<EOF
+    cat > ${XRAY_SERVICE} <<EOF
 [Unit]
 Description=Xray Service
-After=network.target nss-lookup.target
+After=network.target
 
 [Service]
 User=root
-ExecStart=${XRAY_INSTALL_DIR}/xray run -config ${XRAY_CONFIG_FILE}
+ExecStart=${XRAY_BIN} run -config ${XRAY_CONFIG}
 Restart=on-failure
 RestartSec=5
 
-LimitNOFILE=1048576
+LimitNOFILE=51200
 
 [Install]
 WantedBy=multi-user.target
@@ -262,79 +217,199 @@ EOF
 
     systemctl daemon-reload
     systemctl enable xray
+
+}
+
+# ==================================================
+# Start Xray
+# ==================================================
+
+start_xray() {
+
+    print_info "Starting Xray..."
+
     systemctl restart xray
-}
 
-get_server_ip() {
-    SERVER_IP=$(curl -s https://api.ipify.org || true)
+    sleep 2
 
-    if [[ -z "$SERVER_IP" ]]; then
-        SERVER_IP="YOUR_SERVER_IP"
+    if systemctl is-active --quiet xray; then
+        print_info "Xray started successfully"
+    else
+        print_error "Xray failed to start"
+        systemctl status xray --no-pager
+        exit 1
     fi
+
 }
 
-generate_vless_link() {
-    VLESS_LINK="vless://${UUID}@${SERVER_IP}:${PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#xray-reality"
-}
+# ==================================================
+# Show Client Config
+# ==================================================
 
-show_result() {
+show_client_config() {
+
     clear
 
-    echo "========================================"
-    echo " Xray Installation Complete"
-    echo "========================================"
+    print_info "VLESS Link"
+
     echo
-    echo "Server IP:"
-    echo "${SERVER_IP}"
+    cat ${VLESS_LINK_FILE}
     echo
-    echo "Port:"
-    echo "${PORT}"
+
+    print_info "QR Code"
+
     echo
-    echo "UUID:"
-    echo "${UUID}"
+    qrencode -t ANSIUTF8 < ${VLESS_LINK_FILE}
     echo
-    echo "Public Key:"
-    echo "${PUBLIC_KEY}"
-    echo
-    echo "Short ID:"
-    echo "${SHORT_ID}"
-    echo
-    echo "Reality SNI:"
-    echo "${SNI}"
-    echo
-    echo "VLESS Link:"
-    echo
-    echo "${VLESS_LINK}"
-    echo
-    echo "Config File:"
-    echo "${XRAY_CONFIG_FILE}"
-    echo
-    echo "Systemd:"
-    echo "systemctl status xray"
-    echo
-    echo "========================================"
+
 }
 
-main() {
-    require_root
-    detect_os
+# ==================================================
+# Install Xray
+# ==================================================
+
+install_xray() {
+
     install_dependencies
-    enable_bbr
 
-    choose_port
-    choose_sni
+    install_xray_core
 
-    generate_uuid
+    generate_xray_config
 
-    install_xray
-    generate_reality_keys
-    generate_config
-    validate_config
     create_service
 
-    get_server_ip
-    generate_vless_link
-    show_result
+    start_xray
+
+    show_client_config
+
 }
 
-main
+# ==================================================
+# Restart Xray
+# ==================================================
+
+restart_xray() {
+
+    print_info "Restarting Xray..."
+
+    systemctl restart xray
+
+    sleep 2
+
+    systemctl status xray --no-pager
+
+}
+
+# ==================================================
+# Show Config
+# ==================================================
+
+show_config() {
+
+    clear
+
+    if [[ -f ${XRAY_CONFIG} ]]; then
+        cat ${XRAY_CONFIG}
+    else
+        print_error "Config not found"
+    fi
+
+}
+
+# ==================================================
+# Show VLESS Link
+# ==================================================
+
+show_vless_link() {
+
+    clear
+
+    if [[ -f ${VLESS_LINK_FILE} ]]; then
+
+        cat ${VLESS_LINK_FILE}
+
+        echo
+        qrencode -t ANSIUTF8 < ${VLESS_LINK_FILE}
+
+    else
+        print_error "Link file not found"
+    fi
+
+}
+
+# ==================================================
+# Main Menu
+# ==================================================
+
+main_menu() {
+
+    clear
+
+    echo "================================"
+    echo "         Xray Manager"
+    echo "================================"
+    echo "1. Install Xray"
+    echo "2. Update Xray Core"
+    echo "3. Restart Xray"
+    echo "4. Show Config"
+    echo "5. Show VLESS Link"
+    echo "6. Uninstall Xray"
+    echo "0. Exit"
+    echo "================================"
+
+    echo
+
+    read -p "Choose: " CHOICE
+
+    case $CHOICE in
+
+        1)
+            install_xray
+            ;;
+
+        2)
+            print_warn "Coming soon"
+            ;;
+
+        3)
+            restart_xray
+            ;;
+
+        4)
+            show_config
+            ;;
+
+        5)
+            show_vless_link
+            ;;
+
+        6)
+            print_warn "Coming soon"
+            ;;
+
+        0)
+            exit 0
+            ;;
+
+        *)
+            print_error "Invalid option"
+            ;;
+
+    esac
+}
+
+# ==================================================
+# Main
+# ==================================================
+
+check_root
+check_system
+
+while true; do
+
+    main_menu
+
+    echo
+    read -p "Press Enter to continue..."
+
+done
