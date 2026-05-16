@@ -146,32 +146,6 @@ install_xray_core() {
 }
 
 # ==================================================
-# Generate Reality Keys
-# ==================================================
-
-generate_reality_keys() {
-
-    KEY_OUTPUT=$(${XRAY_BIN} x25519)
-
-    PRIVATE_KEY=$(echo "${KEY_OUTPUT}" | grep -i "Private" | awk -F ': ' '{print $2}')
-
-    PUBLIC_KEY=$(echo "${KEY_OUTPUT}" | grep -i "PublicKey\|Public key\|Password" | awk -F ': ' '{print $2}')
-
-    if [[ -z "${PRIVATE_KEY}" || -z "${PUBLIC_KEY}" ]]; then
-
-        print_error "Failed to generate Reality keys"
-
-        echo
-        echo "${KEY_OUTPUT}"
-        echo
-
-        exit 1
-
-    fi
-
-}
-
-# ==================================================
 # Generate Xray Config
 # ==================================================
 
@@ -191,7 +165,23 @@ generate_xray_config() {
 
     UUID=$(cat /proc/sys/kernel/random/uuid)
 
-    generate_reality_keys
+    KEY_OUTPUT=$(${XRAY_BIN} x25519)
+
+    PRIVATE_KEY=$(echo "${KEY_OUTPUT}" | sed -n '1p' | cut -d ':' -f2 | tr -d ' ')
+
+    PUBLIC_KEY=$(echo "${KEY_OUTPUT}" | sed -n '2p' | cut -d ':' -f2 | tr -d ' ')
+
+    if [[ -z "${PRIVATE_KEY}" || -z "${PUBLIC_KEY}" ]]; then
+
+        print_error "Failed to generate Reality keys"
+
+        echo
+        echo "${KEY_OUTPUT}"
+        echo
+
+        exit 1
+
+    fi
 
     SHORT_ID=$(openssl rand -hex 8)
 
