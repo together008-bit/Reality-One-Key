@@ -2,7 +2,7 @@
 
 # ==================================================
 # Xray Manager
-# Phase 1 Stable Version
+# Stable Reality Version
 # ==================================================
 
 # ==================================================
@@ -167,10 +167,27 @@ generate_xray_config() {
 
     KEYS=$(${XRAY_BIN} x25519)
 
-    PRIVATE_KEY=$(echo "${KEYS}" | head -n 1 | awk '{print $3}')
-    PUBLIC_KEY=$(echo "${KEYS}" | tail -n 1 | awk '{print $3}')
+    PRIVATE_KEY=$(echo "${KEYS}" | sed -n 's/Private key: //p')
+    PUBLIC_KEY=$(echo "${KEYS}" | sed -n 's/Public key: //p')
+
+    if [[ -z "${PRIVATE_KEY}" || -z "${PUBLIC_KEY}" ]]; then
+
+        print_error "Failed to generate Reality keys"
+
+        echo
+        echo "${KEYS}"
+        echo
+
+        exit 1
+
+    fi
 
     SHORT_ID=$(openssl rand -hex 8)
+
+    echo
+    print_info "Private Key: ${PRIVATE_KEY}"
+    print_info "Public Key : ${PUBLIC_KEY}"
+    echo
 
     cat > ${XRAY_CONFIG} <<EOF
 {
