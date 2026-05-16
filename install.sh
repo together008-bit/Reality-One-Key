@@ -419,6 +419,67 @@ show_vless_link() {
 }
 
 # ==================================================
+# Uninstall Xray
+# ==================================================
+
+uninstall_xray() {
+
+    clear
+
+    print_warn "This will completely remove Xray"
+
+    echo
+
+    read -p "Are you sure? [y/N]: " CONFIRM
+
+    case "${CONFIRM}" in
+        y|Y|yes|YES)
+            ;;
+        *)
+            print_info "Cancelled"
+            return
+            ;;
+    esac
+
+    print_info "Stopping Xray..."
+
+    systemctl stop xray 2>/dev/null
+
+    print_info "Disabling Xray..."
+
+    systemctl disable xray 2>/dev/null
+
+    print_info "Removing service..."
+
+    rm -f ${XRAY_SERVICE}
+
+    systemctl daemon-reload
+
+    print_info "Removing Xray binary..."
+
+    rm -f ${XRAY_BIN}
+
+    print_info "Removing config..."
+
+    rm -rf ${XRAY_DIR}
+
+    print_info "Removing logs..."
+
+    rm -rf ${XRAY_LOG_DIR}
+
+    print_info "Removing VLESS link..."
+
+    rm -f ${VLESS_LINK_FILE}
+
+    print_info "Removing temporary files..."
+
+    rm -rf /tmp/xray-install
+
+    print_info "Xray completely removed"
+
+}
+
+# ==================================================
 # Main Menu
 # ==================================================
 
@@ -465,7 +526,7 @@ main_menu() {
             ;;
 
         6)
-            print_warn "Coming soon"
+            uninstall_xray
             ;;
 
         0)
